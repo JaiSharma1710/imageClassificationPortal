@@ -1,5 +1,5 @@
 import streamlit as st
-from transformers import ViTFeatureExtractor, ViTForImageClassification
+from transformers import ViTForImageClassification, ViTImageProcessor, pipeline
 from PIL import Image
 import requests
 import torch
@@ -7,7 +7,7 @@ import torch
 
 def predict(image):
     result = []
-    feature_extractor = ViTFeatureExtractor.from_pretrained(
+    feature_extractor = ViTImageProcessor.from_pretrained(
         'sharmajai901/UL_base_classification')
     model = ViTForImageClassification.from_pretrained(
         'sharmajai901/UL_base_classification')
@@ -26,6 +26,16 @@ def predict(image):
     for prob, idx in zip(top_two_probabilities[0], top_two_indices[0]):
         result.append(
             f"Predicted Label: {model.config.id2label[idx.item()]} ({(prob.item()*100):.2f}%)")
+    return result
+
+
+def objects(image):
+    result = []
+    pipe = pipeline("image-segmentation",
+                    model="facebook/mask2former-swin-large-ade-semantic")
+    segments = pipe(image)
+    for ele in segments:
+        result.append(f"{ele['label']} : {(ele['score']*100):.2f}%")
     return result
 
 
@@ -51,8 +61,12 @@ if st.button("Classify"):
 
     image = Image.open(requests.get(URL, stream=True).raw)
     st.image(image, caption="Uploaded Image", use_column_width=True)
-    
+
     with st.spinner("Classifying..."):
         predicted_label = predict(image)
+        segments = objects(image)
     st.success(predicted_label[0])
     st.success(predicted_label[1])
+    st.write('What we see :')
+    for ele in segments:
+        st.write(ele)
