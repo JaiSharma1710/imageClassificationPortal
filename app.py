@@ -1,42 +1,33 @@
 import streamlit as st
-from transformers import ViTForImageClassification, ViTImageProcessor, pipeline
+from transformers import pipeline
 from PIL import Image
 import requests
-import torch
 
 
-def predict(image):
-    result = []
-    feature_extractor = ViTImageProcessor.from_pretrained(
-        'sharmajai901/UL_base_classification')
-    model = ViTForImageClassification.from_pretrained(
-        'sharmajai901/UL_base_classification')
-    inputs = feature_extractor(images=image, return_tensors="pt")
-    outputs = model(**inputs)
-    logits = outputs.logits
-
-    # Apply softmax to get probabilities
-    probabilities = torch.softmax(logits, dim=-1)
-
-    # Get the top two predicted probabilities and their corresponding class indices
-    top_two_probabilities, top_two_indices = torch.topk(
-        probabilities, k=2, dim=-1)
-
-    # Print the top two predicted classes and their probabilities
-    for prob, idx in zip(top_two_probabilities[0], top_two_indices[0]):
-        result.append(
-            f"Predicted Label: {model.config.id2label[idx.item()]} ({(prob.item()*100):.2f}%)")
-    return result
+def base_prediction(image):
+    base_prediction_pipe = pipeline(
+        "image-classification", model="sharmajai901/UL_base_classification")
+    base_prediction = base_prediction_pipe(image)
+    return base_prediction[0]
 
 
-def objects(image):
-    result = []
-    pipe = pipeline("image-segmentation",
-                    model="facebook/mask2former-swin-large-ade-semantic")
-    segments = pipe(image)
-    for ele in segments:
-        result.append(f"{ele['label']} : {(ele['score']*100):.2f}%")
-    return result
+def sub_prediction(image, base_label):
+    if base_label == 'interior':
+        print('interior')
+    elif base_label == 'exterior':
+        exterior_pipe = pipeline(
+            "image-classification", model="sharmajai901/UL_exterior_classification")
+        exterior_pipe_result = exterior_pipe(image)
+        return exterior_pipe_result[0]
+    elif base_label == 'bedrooms':
+        bedrooms_pipe = pipeline(
+            "image-classification", model="sharmajai901/UL_bedroom_classification")
+        bedrooms_pipe_result = bedrooms_pipe(image)
+        return bedrooms_pipe_result[0]
+    elif base_label == 'others':
+        return {'label': 'others', 'score': 0.1}
+    elif base_label == 'floorPlans':
+        return {'label': 'floorPlans', 'score': 0.1}
 
 
 def is_image_url(url):
@@ -63,10 +54,15 @@ if st.button("Classify"):
     st.image(image, caption="Uploaded Image", use_column_width=True)
 
     with st.spinner("Classifying..."):
-        predicted_label = predict(image)
-        segments = objects(image)
-    st.success(predicted_label[0])
-    st.success(predicted_label[1])
-    st.write('What we see :')
-    for ele in segments:
-        st.write(ele)
+        base_predicted_result = base_prediction(image)
+        sub_prediction_result = sub_prediction(
+            image=image, base_label=base_predicted_result['label'])
+
+    st.success(
+        f"Base Category : {base_predicted_result['label']} ( {(base_predicted_result['score']*100):.2f}% )")
+
+    if sub_prediction_result:
+        st.success(
+            f"Sub Category : {sub_prediction_result['label']} ( {(sub_prediction_result['score']*100):.2f}% )")
+    else:
+        st.error('not a valid category')
