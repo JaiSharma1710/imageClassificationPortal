@@ -13,7 +13,10 @@ def base_prediction(image):
 
 def sub_prediction(image, base_label):
     if base_label == 'interior':
-        print('interior')
+        interior_pipe = pipeline(
+            "image-classification", model="sharmajai901/UL_interior_classification")
+        interior_pipe_result = interior_pipe(image)
+        return interior_pipe_result[0]
     elif base_label == 'exterior':
         exterior_pipe = pipeline(
             "image-classification", model="sharmajai901/UL_exterior_classification")
