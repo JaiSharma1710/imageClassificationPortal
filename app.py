@@ -54,6 +54,11 @@ def is_image_url(url):
 st.title("Image Classification")
 
 URL = st.text_input("Image URL")
+if 'base_prediction' not in st.session_state:
+    st.session_state['base_prediction'] = ''
+
+if 'sub_prediction' not in st.session_state:
+    st.session_state['sub_prediction'] = ''
 
 
 def submitResponse(result, main, sub, expected_main, expected_sub):
@@ -93,41 +98,9 @@ def submitResponse(result, main, sub, expected_main, expected_sub):
         st.error(f'Error occurred: {str(e)}')
 
 
-if st.button("Classify"):
-    if not URL:
-        st.error('no URL present')
-
-    if not is_image_url(URL):
-        st.error('only jpg, jpeg, png format allowed')
-
-    image = Image.open(requests.get(URL, stream=True).raw)
-    st.image(image, caption="Uploaded Image", use_column_width=True)
-
-    with st.spinner("Classifying..."):
-        base_predicted_result = base_prediction(image)
-        sub_prediction_result = sub_prediction(
-            image=image, base_label=base_predicted_result['label'])
-
-    st.success(
-        f"Base Category : {base_predicted_result['label']} ( {(base_predicted_result['score']*100):.2f}% )")
-
-    if sub_prediction_result:
-        st.success(
-            f"Sub Category : {sub_prediction_result['label']} ( {(sub_prediction_result['score']*100):.2f}% )")
-    else:
-        st.error('not a valid category')
-
-with st.sidebar:
-    option_1 = st.selectbox(
-        "Shown main category",
-        ["interior", "exterior", "bedrooms", "others", 'floorPlans'],
-        index=None,
-        placeholder="Select shown main category",
-    )
-
+def getOptions(selection):
     sub_category_option = []
-
-    if option_1 == 'interior':
+    if selection == 'interior':
         sub_category_option = [
             'communal lounge',
             'living area',
@@ -150,55 +123,81 @@ with st.sidebar:
             'storage lockers',
             'entertainment area'
         ]
-    elif option_1 == 'exterior':
+    elif selection == 'exterior':
         sub_category_option = [
             'outdoor area',
             'street view',
             'building exterior'
         ]
-    elif option_1 == 'bedrooms':
+    elif selection == 'bedrooms':
         sub_category_option = ['bedroom', 'kitchen', 'bathroom']
-    elif option_1 == 'others':
+    elif selection == 'others':
         sub_category_option = ['others']
-    elif option_1 == 'floorPlans':
+    elif selection == 'floorPlans':
         sub_category_option = ['floorPlans']
+    return sub_category_option
 
-    if option_1:
-        option_2 = st.selectbox(
-            "Shown sub category",
-            sub_category_option,
-            index=None,
-            placeholder="Select shown sub category",
-        )
 
-    if option_1 and option_2:
-        isSuccess = st.selectbox(
-            "is Success",
-            ['Success', 'Fail'],
-            index=None,
-            placeholder="Select result",
-        )
+if st.button("Classify"):
+    if not URL:
+        st.error('no URL present')
 
-        if isSuccess:
-            if isSuccess == 'Fail':
-                option_Fail_main = st.selectbox(
-                    "Expected main category",
-                    ["interior", "exterior", "bedrooms", "others", 'floorPlans'],
+    if not is_image_url(URL):
+        st.error('only jpg, jpeg, png format allowed')
+
+    image = Image.open(requests.get(URL, stream=True).raw)
+    st.image(image, caption="Uploaded Image", use_column_width=True)
+
+    with st.spinner("Classifying..."):
+        base_predicted_result = base_prediction(image)
+        sub_prediction_result = sub_prediction(
+            image=image, base_label=base_predicted_result['label'])
+        st.session_state.base_prediction = base_predicted_result['label']
+        st.session_state.sub_prediction = sub_prediction_result['label']
+
+    st.success(
+        f"Base Category : {base_predicted_result['label']} ( {(base_predicted_result['score']*100):.2f}% )")
+
+    if sub_prediction_result:
+        st.success(
+            f"Sub Category : {sub_prediction_result['label']} ( {(sub_prediction_result['score']*100):.2f}% )")
+    else:
+        st.error('not a valid category')
+
+with st.sidebar:
+    st.text_input(placeholder="Main Category",
+                  value=st.session_state.base_prediction, disabled=True, label='Main Category')
+
+    st.text_input(placeholder="Sub Category",
+                  value=st.session_state.sub_prediction, disabled=True, label='Sub Category')
+
+    isSuccess = st.selectbox(
+        "is Success",
+        ['Success', 'Fail'],
+        index=None,
+        placeholder="Select result",
+    )
+
+    if isSuccess:
+        if isSuccess == 'Fail':
+            option_Fail_main = st.selectbox(
+                "Expected main category",
+                ["interior", "exterior", "bedrooms", "others", 'floorPlans'],
+                index=None,
+                placeholder="Select expected main category",
+            )
+            if option_Fail_main:
+                option_Fail_sub = st.selectbox(
+                    "Expected sub category",
+                    getOptions(option_Fail_main),
                     index=None,
-                    placeholder="Select expected main category",
+                    placeholder="Select expected sub category.",
                 )
-                if option_Fail_main:
-                    option_Fail_sub = st.selectbox(
-                        "Expected sub category",
-                        sub_category_option,
-                        index=None,
-                        placeholder="Select expected sub category.",
-                    )
-                if option_Fail_main and option_Fail_sub:
-                    if st.button('Submit'):
-                        submitResponse(
-                            'Fail', option_1, option_2, option_Fail_main, option_Fail_sub)
-            else:
+            if option_Fail_main and option_Fail_sub:
                 if st.button('Submit'):
                     submitResponse(
-                        'Success', option_1, option_2, '', '')
+                        'Fail', st.session_state.base_prediction, st.session_state.sub_prediction, option_Fail_main, option_Fail_sub)
+        else:
+            if st.button('Submit'):
+                submitResponse(
+                    'Success', st.session_state.base_prediction, st.session_state.sub_prediction, '', '')
